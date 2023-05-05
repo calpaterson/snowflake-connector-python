@@ -196,24 +196,23 @@ def write_pandas(
     logger.debug(f"creating stage with '{create_stage_sql}'")
     cursor.execute(create_stage_sql, _is_internal=True).fetchall()
 
-    with TemporaryDirectory() as tmp_folder:
-        for i, chunk in chunk_helper(df, chunk_size):
-            chunk_path = os.path.join(tmp_folder, f"file{i}.txt")
-            # Dump chunk into parquet file
-            chunk.to_parquet(chunk_path, compression=compression, **kwargs)
-            # Upload parquet file
-            upload_sql = (
-                "PUT /* Python:snowflake.connector.pandas_tools.write_pandas() */ "
-                "'file://{path}' @{stage_location} PARALLEL={parallel}"
-            ).format(
-                path=chunk_path.replace("\\", "\\\\").replace("'", "\\'"),
-                stage_location=stage_location,
-                parallel=parallel,
-            )
-            logger.debug(f"uploading files with '{upload_sql}'")
-            cursor.execute(upload_sql, _is_internal=True)
-            # Remove chunk file
-            os.remove(chunk_path)
+    for i, chunk in chunk_helper(df, chunk_size):
+        chunk_path = f"file{i}.txt"
+        chunk_buf = BytesIO()
+        # Dump chunk into parquet file
+        chunk.to_parquet(chunk_buf, compression=compression, **kwargs)
+        chunk_buf.seek(0)
+        # Upload parquet file
+        upload_sql = (
+            "PUT /* Python:snowflake.connector.pandas_tools.write_pandas() */ "
+            "'file://{path}' @{stage_location} PARALLEL={parallel}"
+        ).format(
+            path=chunk_path.replace("\\", "\\\\").replace("'", "\\'"),
+            stage_location=stage_location,
+            parallel=parallel,
+        )
+        logger.debug(f"uploading files with '{upload_sql}'")
+        cursor.execute(upload_sql, _is_internal=True, stream=chunk_buf)
 
     # in Snowflake, all parquet data is stored in a single column, $1, so we must select columns explicitly
     # see (https://docs.snowflake.com/en/user-guide/script-data-load-transform-parquet.html)
