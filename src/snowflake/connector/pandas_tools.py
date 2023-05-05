@@ -5,11 +5,9 @@
 from __future__ import annotations
 
 import collections.abc
-import os
 import warnings
 from functools import partial
 from logging import getLogger
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Sequence, TypeVar
 
 from typing_extensions import Literal
